@@ -58,19 +58,19 @@ async fn forward(
         trace!("buf: {:x?}", &buf[..len]);
 
         let mut msg = packet::Message::new(&mut buf, len);
-        info!("({}) query received from {}", msg.header.get_id(), addr);
+        info!("({:x?}) query received from {}", msg.header.get_id(), addr);
 
         msg_map.lock().unwrap().insert(msg.header.get_id(), addr);
 
         let mut local_answers = Vec::new();
 
         let queries = msg.question.entries(msg.header.get_qdcount());
-        debug!("({}) questions parsed: {:?}", msg.header.get_id(), queries);
+        debug!("({:x?}) questions parsed: {:?}", msg.header.get_id(), queries);
 
         for query in queries {
             match process(&query, hosts) {
                 Ok(Some(rr)) => {
-                    debug!("({}) local rr created: {:x?}", msg.header.get_id(), rr);
+                    debug!("({:x?}) local rr created: {:x?}", msg.header.get_id(), rr);
                     local_answers.push(rr);
                 }
                 Ok(None) => {}
@@ -81,7 +81,7 @@ async fn forward(
                     msg_map.lock().unwrap().remove(&msg.header.get_id());
 
                     info!(
-                        "({}) query is {}, sending response back to {}",
+                        "({:x?}) query is {}, sending response back to {}",
                         msg.header.get_id(),
                         e,
                         addr
@@ -99,7 +99,7 @@ async fn forward(
         let local_ancount = local_answers.len() as u16;
         if local_ancount == msg.header.get_qdcount() {
             debug!(
-                "({}) constructed a total of {} local rr(s)",
+                "({:x?}) constructed a total of {} local rr(s)",
                 msg.header.get_id(),
                 local_ancount
             );
@@ -113,7 +113,7 @@ async fn forward(
             msg_map.lock().unwrap().remove(&msg.header.get_id());
 
             info!(
-                "({}) query is processed locally, sending response back to {}",
+                "({:x?}) query is processed locally, sending response back to {}",
                 msg.header.get_id(),
                 addr
             );
@@ -123,7 +123,7 @@ async fn forward(
             local_sock.send_to(&buf[..len], addr).await?;
         } else {
             info!(
-                "({}) query cannot be processed locally, forwarding to upstream",
+                "({:x?}) query cannot be processed locally, forwarding to upstream",
                 msg.header.get_id()
             );
 
@@ -145,11 +145,11 @@ async fn reply(
         trace!("buf: {:x?}", &buf[..len]);
 
         let msg = packet::Message::new(&mut buf, len);
-        info!("({}) response received from upstream", msg.header.get_id());
+        info!("({:x?}) response received from upstream", msg.header.get_id());
 
         if let Some(addr) = msg_map.lock().unwrap().remove(&msg.header.get_id()) {
             info!(
-                "({}) upstream response is sending back to {}",
+                "({:x?}) upstream response is sending back to {}",
                 msg.header.get_id(),
                 addr
             );
@@ -233,7 +233,7 @@ pub struct Config {
 impl Config {
     pub fn from_env() -> Config {
         Config {
-            local_addr: env::var("LOCAL_ADDR").unwrap_or("127.0.0.1:5300".to_owned()),
+            local_addr: env::var("LOCAL_ADDR").unwrap_or("127.0.0.1:53".to_owned()),
             remote_addr: env::var("REMOTE_ADDR").unwrap_or("0.0.0.0:10053".to_owned()),
             upstream_addr: env::var("UPSTREAM_ADDR").unwrap_or("10.3.9.45:53".to_owned()),
             hosts_path: env::var("HOSTS_PATH").unwrap_or("hosts.txt".to_owned()),
