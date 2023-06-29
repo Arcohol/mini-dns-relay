@@ -138,6 +138,7 @@ impl Answer<'_> {
     }
 }
 
+#[derive(Debug)]
 pub struct QuestionEntry {
     pub offset: usize,
     pub qname: String,
@@ -145,6 +146,7 @@ pub struct QuestionEntry {
     pub qclass: u16,
 }
 
+#[derive(Debug)]
 pub struct ResourceRecord {
     pub name: u16,
     pub rtype: u16,
@@ -154,6 +156,7 @@ pub struct ResourceRecord {
     pub rdata: RData,
 }
 
+#[derive(Debug)]
 pub enum RData {
     V4([u8; 4]),
     V6([u8; 16]),

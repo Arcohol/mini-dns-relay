@@ -10,6 +10,7 @@ use std::{
 
 use packet::{QuestionEntry, RData, ResourceRecord};
 use tokio::net::UdpSocket;
+use tracing::{debug, info, trace};
 
 pub type MsgMap = Arc<Mutex<HashMap<u16, SocketAddr>>>;
 pub type Hosts = HashMap<String, IpAddr>;
@@ -19,9 +20,14 @@ const DEFAULT_TTL: usize = 600;
 
 pub async fn run(config: Config) -> anyhow::Result<()> {
     let local_sock = UdpSocket::bind(&config.local_addr).await?;
+    info!("local socket is listening on {}", &config.local_addr);
+
     let remote_sock = UdpSocket::bind(&config.remote_addr).await?;
+    info!("remote socket is listening on {}", &config.remote_addr);
 
     let hosts = load_hosts(&config.hosts_path)?;
+    debug!("hosts: {:?}", hosts);
+
     let msg_map: MsgMap = Arc::new(Mutex::new(HashMap::new()));
 
     tokio::try_join!(
@@ -49,63 +55,55 @@ async fn forward(
         let mut buf = [0u8; BUF_SIZE];
 
         let (len, addr) = local_sock.recv_from(&mut buf).await?;
+        trace!("buf: {:x?}", &buf[..len]);
+
         let mut msg = packet::Message::new(&mut buf, len);
+        info!("({}) query received from {}", msg.header.get_id(), addr);
 
         msg_map.lock().unwrap().insert(msg.header.get_id(), addr);
 
         let mut local_answers = Vec::new();
-        for query in msg.question.entries(msg.header.get_qdcount()) {
-            if let Some(ip) = hosts.get(&query.qname) {
-                if ip == &Ipv4Addr::UNSPECIFIED {
+
+        let queries = msg.question.entries(msg.header.get_qdcount());
+        debug!("({}) questions parsed: {:?}", msg.header.get_id(), queries);
+
+        for query in queries {
+            match process(&query, hosts) {
+                Ok(Some(rr)) => {
+                    debug!("({}) local rr created: {:x?}", msg.header.get_id(), rr);
+                    local_answers.push(rr);
+                }
+                Ok(None) => {}
+                Err(e) => {
                     msg.header.set_qr(0b1);
                     msg.header.set_rcode(0b0011);
 
                     msg_map.lock().unwrap().remove(&msg.header.get_id());
 
+                    info!(
+                        "({}) query is {}, sending response back to {}",
+                        msg.header.get_id(),
+                        e,
+                        addr
+                    );
                     let len = msg.len();
+
+                    trace!("buf: {:x?}", &buf[..len]);
                     local_sock.send_to(&buf[..len], addr).await?;
+
                     continue 'outer;
-                }
-
-                if query.qtype != 1 && query.qtype != 28 {
-                    continue;
-                }
-
-                match ip {
-                    IpAddr::V4(ip) => {
-                        if query.qtype != 1 {
-                            continue;
-                        }
-                        let rr = ResourceRecord {
-                            name: name_compressed(&query),
-                            rtype: query.qtype,
-                            rclass: query.qclass,
-                            ttl: DEFAULT_TTL as u32,
-                            rdlength: 4,
-                            rdata: RData::V4(ip.octets()),
-                        };
-                        local_answers.push(rr);
-                    }
-                    IpAddr::V6(ip) => {
-                        if query.qtype != 28 {
-                            continue;
-                        }
-                        let rr = ResourceRecord {
-                            name: name_compressed(&query),
-                            rtype: query.qtype,
-                            rclass: query.qclass,
-                            ttl: DEFAULT_TTL as u32,
-                            rdlength: 16,
-                            rdata: RData::V6(ip.octets()),
-                        };
-                        local_answers.push(rr);
-                    }
                 }
             }
         }
 
         let local_ancount = local_answers.len() as u16;
         if local_ancount == msg.header.get_qdcount() {
+            debug!(
+                "({}) constructed a total of {} local rr(s)",
+                msg.header.get_id(),
+                local_ancount
+            );
+
             msg.header.set_qr(0b1);
             msg.header.set_ancount(local_ancount);
             msg.header.set_nscount(0);
@@ -114,9 +112,22 @@ async fn forward(
 
             msg_map.lock().unwrap().remove(&msg.header.get_id());
 
+            info!(
+                "({}) query is processed locally, sending response back to {}",
+                msg.header.get_id(),
+                addr
+            );
             let len = msg.len();
+
+            trace!("buf: {:x?}", &buf[..len]);
             local_sock.send_to(&buf[..len], addr).await?;
         } else {
+            info!(
+                "({}) query cannot be processed locally, forwarding to upstream",
+                msg.header.get_id()
+            );
+
+            trace!("buf: {:x?}", &buf[..len]);
             remote_sock.send_to(&buf[..len], &upstream).await?;
         }
     }
@@ -131,10 +142,20 @@ async fn reply(
         let mut buf = [0u8; BUF_SIZE];
 
         let (len, _) = remote_sock.recv_from(&mut buf).await?;
+        trace!("buf: {:x?}", &buf[..len]);
+
         let msg = packet::Message::new(&mut buf, len);
+        info!("({}) response received from upstream", msg.header.get_id());
 
         if let Some(addr) = msg_map.lock().unwrap().remove(&msg.header.get_id()) {
+            info!(
+                "({}) upstream response is sending back to {}",
+                msg.header.get_id(),
+                addr
+            );
             let len = msg.len();
+
+            trace!("buf: {:x?}", &buf[..len]);
             local_sock.send_to(&buf[..len], addr).await?;
         }
     }
@@ -159,6 +180,45 @@ fn load_hosts(path: &str) -> anyhow::Result<Hosts> {
     Ok(hosts)
 }
 
+fn process(qe: &QuestionEntry, hosts: &Hosts) -> anyhow::Result<Option<ResourceRecord>> {
+    match hosts.get(&qe.qname) {
+        Some(ip) => match ip {
+            IpAddr::V4(ip) if ip == &Ipv4Addr::UNSPECIFIED => {
+                return Err(anyhow::anyhow!("blocked"));
+            }
+            IpAddr::V4(ip) => {
+                if qe.qtype != 1 {
+                    return Ok(None);
+                }
+                let rr = ResourceRecord {
+                    name: name_compressed(qe),
+                    rtype: qe.qtype,
+                    rclass: qe.qclass,
+                    ttl: DEFAULT_TTL as u32,
+                    rdlength: 4,
+                    rdata: RData::V4(ip.octets()),
+                };
+                return Ok(Some(rr));
+            }
+            IpAddr::V6(ip) => {
+                if qe.qtype != 28 {
+                    return Ok(None);
+                }
+                let rr = ResourceRecord {
+                    name: name_compressed(qe),
+                    rtype: qe.qtype,
+                    rclass: qe.qclass,
+                    ttl: DEFAULT_TTL as u32,
+                    rdlength: 16,
+                    rdata: RData::V6(ip.octets()),
+                };
+                return Ok(Some(rr));
+            }
+        },
+        None => Ok(None),
+    }
+}
+
 fn name_compressed(qe: &QuestionEntry) -> u16 {
     0b1100_0000_0000_0000 | (qe.offset as u16)
 }
@@ -173,7 +233,7 @@ pub struct Config {
 impl Config {
     pub fn from_env() -> Config {
         Config {
-            local_addr: env::var("LOCAL_ADDR").unwrap_or("127.0.0.1:53".to_owned()),
+            local_addr: env::var("LOCAL_ADDR").unwrap_or("127.0.0.1:5300".to_owned()),
             remote_addr: env::var("REMOTE_ADDR").unwrap_or("0.0.0.0:10053".to_owned()),
             upstream_addr: env::var("UPSTREAM_ADDR").unwrap_or("10.3.9.45:53".to_owned()),
             hosts_path: env::var("HOSTS_PATH").unwrap_or("hosts.txt".to_owned()),
