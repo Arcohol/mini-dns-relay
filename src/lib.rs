@@ -219,9 +219,7 @@ fn load_hosts(path: &str) -> anyhow::Result<Hosts> {
 fn process(qe: &QuestionEntry, hosts: &Hosts) -> anyhow::Result<Option<ResourceRecord>> {
     match hosts.get(&qe.qname) {
         Some(ip) => match ip {
-            IpAddr::V4(ip) if ip == &Ipv4Addr::UNSPECIFIED => {
-                Err(anyhow::anyhow!("blocked"))
-            }
+            IpAddr::V4(ip) if ip == &Ipv4Addr::UNSPECIFIED => Err(anyhow::anyhow!("blocked")),
             IpAddr::V4(ip) => {
                 if qe.qtype != 1 {
                     return Ok(None);
