@@ -1,6 +1,8 @@
-# 1. Overview
+# DNSRelay - Group 24
 
-## 1.1. Brief Requirements
+## Overview
+
+###  Brief Requirements
 
 Implement a DNS relay that:
 - Receives DNS queries from DNS client (Resolver) and forwards them to a given DNS server.
@@ -11,37 +13,61 @@ The relay should implement the following three requirements:
 - If found, for IP address 0.0.0.0, it sends back “no such name” (reply code =0011).
 - For domain name not included in the database, it forwards query to local DNS server.
 
-## 1.2. Target
+### Target
 
 One of the targets is to gain a deeper understanding of how the Domain Name System (DNS) works and, specifically, to learn about the process of resolving domain names to IP addresses, which is a fundamental aspect of how the internet functions. By hands-on experience working with DNS queries and responses, we can learn about DNS caching and how it can be used to improve the performance of DNS resolution. By implementing a DNS relay in Rust, we will have the opportunity to learn how to work with Rust's syntax and data types, as well as its concurrency model. Rust has a strong focus on safe and efficient concurrency, which makes it a great choice for building networked applications like a DNS relay.
 
-# 2. Requirements Analysis
+## Requirements Analysis
 
-## 2.1. Development Environment
+### Development Environment
 
 - Operating system: Linux
 - Programming language: Rust
 
-## 2.2. Detailed Requirements
+### Detailed Requirements
 
-On startup, the program should read environmental variables, user arguments and the local file. It also opens a new socket and binds to port 53 for DNS service. Upon receiving queries from client, the program parses the packet and extract useful information for further process, such as the query name and offset of the question. The local file is looked up for cache hit and blacklist blocking. If all questions in the query can be processed without consulting the upstream DNS server, a reply consisting of one or multiple answers is constructed and sent to the clients. Otherwise, the query packet is forwarded to the upstream DNS server. A map is added associating the upstream ID, the client ID and their sockets on the Internet. When receiving a reply from the upstream DNS, its content is used to update the local cache, and its ID is mapped to the client ID so that the reply can be forwarded back to theh client.
+On startup, the program should read environmental variables, user arguments and the local file. It also opens a new socket and binds to port 53 for DNS service. Upon receiving queries from client, the program parses the packet and extract useful information for further process, such as the query name and offset of the question. The local file is looked up for cache hit and blacklist blocking. If all questions in the query can be processed without consulting the upstream DNS server, a reply consisting of one or multiple answers is constructed and sent to the clients. Otherwise, the query packet is forwarded to the upstream DNS server. A map is added associating the upstream ID, the client ID and their sockets on the Internet. When receiving a reply from the upstream DNS, its content is used to update the local cache, and its ID is mapped to the client ID so that the reply can be forwarded back to the client.
 
-# 3. Design
+## Design
 
-## 3.1. Flow Chart
+Generally speaking, there are two loops running asynchronously, namely 'forward' and 'reply'. The following diagrams show the their workflows.
 
-!!!!!!!!! need chart
+### Flow Chart
 
-1. Receive a DNS query
-2. Check local file
-    - If all questions match records in file that are not 0.0.0.0, a reply is constructed and sent to the client.
-    - If any of the questions matches a record in file that is 0.0.0., a reply of "no such name" is constructed and sent to the client.
-    - If any of the questions is not found in the file, the DNS query is forwarded to the upstream DNS server.
-3. Receive a reply from DNS server
-4. Update local file with answers in the reply
-5. Forward reply to the corresponding client.
+```mermaid
+---
+title: Workflow - Forward
+---
+flowchart TD
+	A(Receive one query from clients)
+	B(Parse the message)
+	C(Check the hosts and try to construct RRs)
+	D("`Append the RRs
+	Send back response`")
+	E(Forward the query to DNS server)
+	F("`Query is blocked
+	Send back rcode=0011`")
+	X(Set a new random ID)
+	Y("`Save information
+	new_id => (old_id, addr)`")
+	A-->B-->C
+	C-->|ancount == qdcount|D
+	C-->|ancount < qdcount|X-->Y-->E
+	C-->|0.0.0.0|F
+```
 
-## 3.2. Data Structure
+```mermaid
+---
+title: Workflow - Reply
+---
+flowchart TD
+A(Receive one response from DNS server)
+B(Find the original ID and socket address)
+C(Send the response back to its corresponding client)
+A-->B-->C
+```
+
+### Data Structure
 
 !!!!!!!! need code snippet
 
@@ -51,25 +77,25 @@ Struct QuestionEntry is comprised of an offset, a qname, a qtype and a qclass. I
 
 Struct ResourceRecord contains all information stored in the local file and needed to construct the reply packet. It includes a name, a rtype, a rclass, a ttl, a rdlength, and a rdata. The name is strored as a two bytes unsigned integer as a pointer to the starting bit of the corresponding question. The rdata is the answer to a question in the client query packet.
 
-# 4. Results
+## Results
 
-## 4.1. Blacklist
-
-!!!!!!!!
-
-## 4.2. Local Record Matching
+### Blacklist
 
 !!!!!!!!
 
-## 4.3. Upstream Forwarding
+### Local Record Matching
 
 !!!!!!!!
 
-## 4.4. Queries with Same ID at Short Intervals
+### Upstream Forwarding
 
 !!!!!!!!
 
-# 5. Conclusion
+### Queries with Same ID at Short Intervals
+
+!!!!!!!!
+
+## Conclusion
 
 The implementation of a DNS relay is a challenging and rewarding project that provides a valuable learning experience in network programming. Through this project, we have gained a deeper understanding of the Domain Name System (DNS) and how it facilitates internet communication by resolving domain names to IP addresses.
 
