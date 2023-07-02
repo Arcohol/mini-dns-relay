@@ -169,23 +169,24 @@ async fn reply(
             msg.header.get_id()
         );
 
-        match msg_map.lock().unwrap().remove(&msg.header.get_id()) {
-            Some((origin_id, addr)) => {
+        let origin = msg_map.lock().unwrap().remove(&msg.header.get_id());
+        match origin {
+            Some((id, addr)) => {
                 info!(
                     "({:x?}) the original query id is {:x?}, changing back to it",
                     msg.header.get_id(),
-                    origin_id
+                    id
                 );
 
-                msg.header.set_id(origin_id);
+                msg.header.set_id(id);
 
                 info!(
                     "({:x?}) upstream response is sending back to {}",
                     msg.header.get_id(),
                     addr
                 );
-                let len = msg.len();
 
+                let len = msg.len();
                 trace!("buf: {:x?}", &buf[..len]);
                 local_sock.send_to(&buf[..len], addr).await?;
             }
