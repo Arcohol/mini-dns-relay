@@ -1,6 +1,5 @@
 use clap::Parser;
 use tracing::info;
-use tracing_subscriber;
 
 #[derive(Parser)]
 struct Cli {

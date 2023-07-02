@@ -220,7 +220,7 @@ fn process(qe: &QuestionEntry, hosts: &Hosts) -> anyhow::Result<Option<ResourceR
     match hosts.get(&qe.qname) {
         Some(ip) => match ip {
             IpAddr::V4(ip) if ip == &Ipv4Addr::UNSPECIFIED => {
-                return Err(anyhow::anyhow!("blocked"));
+                Err(anyhow::anyhow!("blocked"))
             }
             IpAddr::V4(ip) => {
                 if qe.qtype != 1 {
@@ -234,7 +234,7 @@ fn process(qe: &QuestionEntry, hosts: &Hosts) -> anyhow::Result<Option<ResourceR
                     rdlength: 4,
                     rdata: RData::V4(ip.octets()),
                 };
-                return Ok(Some(rr));
+                Ok(Some(rr))
             }
             IpAddr::V6(ip) => {
                 if qe.qtype != 28 {
@@ -248,7 +248,7 @@ fn process(qe: &QuestionEntry, hosts: &Hosts) -> anyhow::Result<Option<ResourceR
                     rdlength: 16,
                     rdata: RData::V6(ip.octets()),
                 };
-                return Ok(Some(rr));
+                Ok(Some(rr))
             }
         },
         None => Ok(None),
