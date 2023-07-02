@@ -1,3 +1,2 @@
 0.0.0.0 www.baidu.com www.zhihu.com www.qq.com
-2001:da8:215:4038::161 www.bupt.edu.cn
 211.68.69.240 www.bupt.edu.cn

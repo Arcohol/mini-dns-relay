@@ -10,7 +10,7 @@ use std::{
 
 use packet::{QuestionEntry, RData, ResourceRecord};
 use tokio::net::UdpSocket;
-use tracing::{debug, info, trace};
+use tracing::{debug, error, info, trace};
 
 pub type MsgMap = Arc<Mutex<HashMap<u16, SocketAddr>>>;
 pub type Hosts = HashMap<String, IpAddr>;
@@ -65,7 +65,11 @@ async fn forward(
         let mut local_answers = Vec::new();
 
         let queries = msg.question.entries(msg.header.get_qdcount());
-        debug!("({:x?}) questions parsed: {:?}", msg.header.get_id(), queries);
+        debug!(
+            "({:x?}) questions parsed: {:?}",
+            msg.header.get_id(),
+            queries
+        );
 
         for query in queries {
             match process(&query, hosts) {
@@ -145,18 +149,26 @@ async fn reply(
         trace!("buf: {:x?}", &buf[..len]);
 
         let msg = packet::Message::new(&mut buf, len);
-        info!("({:x?}) response received from upstream", msg.header.get_id());
+        info!(
+            "({:x?}) response received from upstream",
+            msg.header.get_id()
+        );
 
-        if let Some(addr) = msg_map.lock().unwrap().remove(&msg.header.get_id()) {
-            info!(
-                "({:x?}) upstream response is sending back to {}",
-                msg.header.get_id(),
-                addr
-            );
-            let len = msg.len();
+        match msg_map.lock().unwrap().remove(&msg.header.get_id()) {
+            Some(addr) => {
+                info!(
+                    "({:x?}) upstream response is sending back to {}",
+                    msg.header.get_id(),
+                    addr
+                );
+                let len = msg.len();
 
-            trace!("buf: {:x?}", &buf[..len]);
-            local_sock.send_to(&buf[..len], addr).await?;
+                trace!("buf: {:x?}", &buf[..len]);
+                local_sock.send_to(&buf[..len], addr).await?;
+            }
+            None => {
+                error!("({:x?}) no corresponding query found", msg.header.get_id());
+            }
         }
     }
 }
