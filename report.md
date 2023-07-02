@@ -21,7 +21,7 @@ There are 3 different cases we need to handle:
 
 One of the targets is to gain a deeper understanding of how the Domain Name System (DNS) works and, specifically, to learn about the process of resolving domain names to IP addresses, which is a fundamental aspect of how the Internet functions.
 
-By implementing a DNS relay in Rust, we will have the opportunity to learn how to work with Rust's syntax and data types, as well as its concurrency model. Rust has a strong focus on safe and efficient concurrency, which makes it a great choice for building networked applications like a DNS relay.
+By implementing a DNS relay in Rust, we will have the opportunity to learn how to work with Rust's syntax and data types, as well as its concurrency model. Rust has a strong focus on safe and efficient concurrency, which makes it a great choice for building network applications such as a DNS relay.
 
 ## Requirements Analysis
 
@@ -32,15 +32,15 @@ By implementing a DNS relay in Rust, we will have the opportunity to learn how t
 
 ### Detailed Requirements
 
-On startup, the program should read environmental variables, user arguments and the local hosts file. It also opens two `UdpSocket`s: one for communicating with clients, one for communicating with upstream DNS server.
+On startup, the program should read environmental variables, command line arguments and the local hosts file. It also opens two `UdpSocket`s: one for communicating with clients, one for communicating with upstream DNS server.
 
-Upon receiving queries from client, the program parses the packet and extract useful information for further process. The hosts file is looked up for local answer construction and blacklist blocking.
+Upon receiving queries from clients, the program parses the packet and extract useful information for further processing. The hosts file is checked for local answer construction and blacklist blocking.
 
 If all questions in the query can be processed without consulting the upstream DNS server, a reply consisting of one or multiple answers is constructed and sent to the clients. Otherwise, the query packet is forwarded to the upstream DNS server.
 
 ## System Design
 
-Generally speaking, there are two loops running **asynchronously**, namely 'forward' and 'reply'. The following diagrams show the their workflows.
+Generally speaking, there are two loops running **asynchronously**, namely '**forward**' and '**reply**'. The following diagrams show the their workflows.
 
 ### Flow Chart
 
@@ -142,7 +142,7 @@ Sample hosts file:
 
 As shown in the `hosts.txt`, `www.baidu.com` is blocked with an address of `0.0.0.0`.
 
-The program responded with a `NXDOMAIN`, indicating that the domain did not exist.
+The program responded with a `NXDOMAIN`, indicating that the domain does not exist.
 
 ![image-20230702235352064](/home/arcohol/.config/Typora/typora-user-images/image-20230702235352064.png)
 
@@ -156,7 +156,7 @@ The AAAA query which cannot be processed locally is forwarded to the upstream.
 
 ### 3. Upstream Forwarding
 
-`www.apple.com` was not found in the hosts. Therefore, the program forwarded the packet to upstream DNS server. After receiving the reply from the upstream, it forwarded back to the client.
+`www.apple.com` was not found in the hosts. Therefore, the program forwarded the packet to upstream DNS server. After receiving the reply from the upstream, the server forwarded the response back to the client.
 
 ![image-20230703000041607](/home/arcohol/.config/Typora/typora-user-images/image-20230703000041607.png)
 
@@ -164,10 +164,10 @@ The AAAA query which cannot be processed locally is forwarded to the upstream.
 
 The implementation of a DNS relay is a challenging and rewarding project that provides a valuable learning experience in network programming. Through this project, we have gained a deeper understanding of the Domain Name System (DNS) and how it facilitates internet communication by resolving domain names to IP addresses.
 
-Our implementation of the DNS relay in Rust allowed us to learn and improve our skills in this modern systems programming language. Rust's features and focus on safe and efficient concurrency made it an excellent choice for building a networked application like a DNS relay.
+Our implementation of the DNS relay in Rust allowed us to learn and improve our skills in this modern systems programming language. Rust's features and focus on safe and efficient concurrency made it an excellent choice for building a network application such as a DNS relay.
 
 Throughout the implementation process, we faced a number of challenges, including working with DNS queries and responses. However, through a methodical approach to problem-solving and careful consideration of system design, we were able to overcome these challenges and produce a functional and reliable DNS relay server.
 
-There are several possible future improvements that can be employed in this system. For example, a fast and reliable caching system can be implemented so that the network consumption for upstream link will be greatly reduced. It can be very tricky as this involves cache time design, and possibly recursive searching. We decided to not include a cache in this system because we think a unreliable cache is pretty much redundant and may cause a significant drop of performance.
+There are several possible future improvements that can be employed in this system. For example, a fast and reliable caching system can be implemented so that the network consumption for upstream link can be greatly reduced. It could be very tricky as this involves cache time design, and possibly recursive searching. We decided to not include a cache in this system because we think a unreliable cache is pretty much redundant and may cause a significant drop of performance.
 
 Overall, this project has provided us with valuable experience in network programming, Rust development, and system design.
