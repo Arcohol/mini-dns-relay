@@ -69,31 +69,44 @@ A-->B-->C
 
 ### Data Structure
 
-!!!!!!!! need code snippet
+![img](message.png)
 
 Struct Message comprises a header, a question, and an answer struct. All three types of struct consist of a byte buffer and the length of the buffer. Methods such as get_id() and add_entries() are implemented to manipulate the data structures.
 
+![img](header.png)
+
+![img](question.png)
+
 Struct QuestionEntry is comprised of an offset, a qname, a qtype and a qclass. It is used to construct the answer part of the reply to clients. The offset points to the starting bit of the qname in the question section in the client query. The qname is the query string. The qtype field is used to specify the type of resource record being requested. Common types include A records (which map domain names to IP addresses), MX records (which specify the mail server for a domain), and NS records (which specify the authoritative name server for a domain). The qclass field is used to specify the class of the resource record being requested. This is typically set to IN, which indicates that the record is part of the Internet class.
+
+![img](answer.png)
 
 Struct ResourceRecord contains all information stored in the local file and needed to construct the reply packet. It includes a name, a rtype, a rclass, a ttl, a rdlength, and a rdata. The name is strored as a two bytes unsigned integer as a pointer to the starting bit of the corresponding question. The rdata is the answer to a question in the client query packet.
 
+![img](others.png)
+
 ## Results
+
+Hosts:
+![img](hosts.png)
 
 ### Blacklist
 
-!!!!!!!!
+![img](blacklist.png)
+
+As shown in the hosts.txt, www.baidu.com is blocked in the blacklist, so the program returned a NXDOMAIN, indicating that the domain did not exist.
 
 ### Local Record Matching
 
-!!!!!!!!
+![img](local.png)
+
+www.bupt.edu.cn exists as an entry in hosts.txt, so the relay successfully matched the local record and returned the recorded A answer 211.68.69.240.
 
 ### Upstream Forwarding
 
-!!!!!!!!
+![img](forwarding.png)
 
-### Queries with Same ID at Short Intervals
-
-!!!!!!!!
+www.bilibili.com was not found in the hosts. Therefore, the program forwarded the packet to upstream DNS server after doing a id mapping. After receiving the reply from the upstream, it forwarded back to the client.
 
 ## Conclusion
 
