@@ -12,7 +12,7 @@ use packet::{QuestionEntry, RData, ResourceRecord};
 use tokio::net::UdpSocket;
 use tracing::{debug, error, info, trace};
 
-pub type MsgMap = Arc<Mutex<HashMap<u16, SocketAddr>>>;
+pub type MsgMap = Arc<Mutex<HashMap<u16, (u16, SocketAddr)>>>;
 pub type Hosts = HashMap<String, IpAddr>;
 
 const BUF_SIZE: usize = 512;
@@ -60,10 +60,6 @@ async fn forward(
         let mut msg = packet::Message::new(&mut buf, len);
         info!("({:x?}) query received from {}", msg.header.get_id(), addr);
 
-        msg_map.lock().unwrap().insert(msg.header.get_id(), addr);
-
-        let mut local_answers = Vec::new();
-
         let queries = msg.question.entries(msg.header.get_qdcount());
         debug!(
             "({:x?}) questions parsed: {:?}",
@@ -71,6 +67,7 @@ async fn forward(
             queries
         );
 
+        let mut local_answers = Vec::new();
         for query in queries {
             match process(&query, hosts) {
                 Ok(Some(rr)) => {
@@ -81,8 +78,6 @@ async fn forward(
                 Err(e) => {
                     msg.header.set_qr(0b1);
                     msg.header.set_rcode(0b0011);
-
-                    msg_map.lock().unwrap().remove(&msg.header.get_id());
 
                     info!(
                         "({:x?}) query is {}, sending response back to {}",
@@ -114,8 +109,6 @@ async fn forward(
             msg.header.set_arcount(0);
             msg.answer.add_entries(local_answers);
 
-            msg_map.lock().unwrap().remove(&msg.header.get_id());
-
             info!(
                 "({:x?}) query is processed locally, sending response back to {}",
                 msg.header.get_id(),
@@ -127,9 +120,31 @@ async fn forward(
             local_sock.send_to(&buf[..len], addr).await?;
         } else {
             info!(
-                "({:x?}) query cannot be processed locally, forwarding to upstream",
+                "({:x?}) query cannot be processed locally",
                 msg.header.get_id()
             );
+
+            {
+                let mut map = msg_map.lock().unwrap();
+
+                // try to generate a new id of 16 bits
+                let mut new_id = rand::random::<u16>();
+                while map.contains_key(&new_id) {
+                    new_id = rand::random::<u16>();
+                }
+
+                map.insert(new_id, (msg.header.get_id(), addr));
+
+                info!(
+                    "({:x?}) new id generated: {:x?}",
+                    msg.header.get_id(),
+                    new_id
+                );
+                msg.header.set_id(new_id);
+                // mutex guard dropped here
+            }
+
+            info!("({:x?}) query is sending to upstream", msg.header.get_id(),);
 
             trace!("buf: {:x?}", &buf[..len]);
             remote_sock.send_to(&buf[..len], &upstream).await?;
@@ -148,14 +163,22 @@ async fn reply(
         let (len, _) = remote_sock.recv_from(&mut buf).await?;
         trace!("buf: {:x?}", &buf[..len]);
 
-        let msg = packet::Message::new(&mut buf, len);
+        let mut msg = packet::Message::new(&mut buf, len);
         info!(
             "({:x?}) response received from upstream",
             msg.header.get_id()
         );
 
         match msg_map.lock().unwrap().remove(&msg.header.get_id()) {
-            Some(addr) => {
+            Some((origin_id, addr)) => {
+                info!(
+                    "({:x?}) the original query id is {:x?}, changing back to it",
+                    msg.header.get_id(),
+                    origin_id
+                );
+
+                msg.header.set_id(origin_id);
+
                 info!(
                     "({:x?}) upstream response is sending back to {}",
                     msg.header.get_id(),
@@ -235,6 +258,7 @@ fn name_compressed(qe: &QuestionEntry) -> u16 {
     0b1100_0000_0000_0000 | (qe.offset as u16)
 }
 
+#[derive(Debug)]
 pub struct Config {
     pub local_addr: String,
     pub remote_addr: String,

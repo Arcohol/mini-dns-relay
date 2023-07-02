@@ -44,6 +44,10 @@ impl Header<'_> {
         u16::from_be_bytes([self.buf[4], self.buf[5]])
     }
 
+    pub fn set_id(&mut self, id: u16) {
+        self.buf[0..2].copy_from_slice(&id.to_be_bytes());
+    }
+
     pub fn set_qr(&mut self, qr: u8) {
         self.buf[2] = (self.buf[2] & 0b0111_1111) | (qr << 7);
     }

@@ -1,4 +1,5 @@
 use clap::Parser;
+use tracing::info;
 use tracing_subscriber;
 
 #[derive(Parser)]
@@ -20,5 +21,7 @@ async fn main() -> anyhow::Result<()> {
     tracing_subscriber::fmt().with_max_level(level).init();
 
     let config = mini_dns_relay::Config::from_env();
+    info!("config: {:?}", config);
+
     mini_dns_relay::run(config).await
 }
