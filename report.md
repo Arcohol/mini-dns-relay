@@ -141,7 +141,7 @@ As shown in the `hosts.txt`, `www.baidu.com` is blocked with an address of `0.0.
 
 The program responded with a `NXDOMAIN`, indicating that the domain does not exist.
 
-![image-20230709161225072](./assets/image-20230709161225072.png)
+![image-20230709161225072](./screenshots/image-20230709161225072.png)
 
 ### 2. Local Record Matching
 
@@ -149,13 +149,13 @@ The program responded with a `NXDOMAIN`, indicating that the domain does not exi
 
 The AAAA query which cannot be processed locally is forwarded to the upstream.
 
-![image-20230709161328075](./assets/image-20230709161328075.png)
+![image-20230709161328075](./screenshots/image-20230709161328075.png)
 
 ### 3. Upstream Forwarding
 
 `www.apple.com` was not found in the hosts. Therefore, the program forwarded the packet to upstream DNS server. After receiving the reply from the upstream, the server forwarded the response back to the client.
 
-![image-20230709161726666](./assets/image-20230709161726666.png)
+![image-20230709161726666](./screenshots/image-20230709161726666.png)
 
 ## Conclusion and Future Improvements
 
